@@ -3,7 +3,7 @@ const axios = require('axios');
 const cron = require('node-cron');
 
 const TELEGRAM_BOT_TOKEN = "8606504447:AAHmj3Puj6lzzSiymQzOjblqz4WTbQfZux4"; // Revoke this via @BotFather after the drop!
-const TELEGRAM_CHAT_IDS = ["682166234", "6125693399"];
+const TELEGRAM_CHAT_IDS = ["682166234"];
 const API_URL = "https://rcbscaleapi.ticketgenie.in/ticket/eventlist/O";
 let lastState = null;
 
