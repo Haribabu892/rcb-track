@@ -1,6 +1,6 @@
 
 const axios = require('axios');
-const cron = require('node-cron');
+
 
 const TELEGRAM_BOT_TOKEN = "8606504447:AAHmj3Puj6lzzSiymQzOjblqz4WTbQfZux4"; // Revoke this via @BotFather after the drop!
 const TELEGRAM_CHAT_IDS = ["682166234"];
@@ -70,6 +70,61 @@ async function checkTickets() {
   }
 }
 
-// Run every minute
-cron.schedule('* * * * *', checkTickets);
-console.log('RCB Ticket Cron started. Polling every minute.');
+
+let intervalId = null;
+let notificationInProgress = false;
+
+async function sendMultipleNotifications(message, count = 15, delay = 2000) {
+  for (let i = 0; i < count; i++) {
+    await sendTelegramAlert(`${message}\n(Notification ${i + 1} of ${count})`);
+    if (i < count - 1) await new Promise(res => setTimeout(res, delay));
+  }
+}
+
+async function intervalCheck() {
+  if (notificationInProgress) return;
+  try {
+    const res = await axios.get(API_URL, { timeout: 20000 });
+    const data = res.data;
+    let shouldAlert = false;
+    let reason = [];
+
+    if (data.message && data.message.trim() !== "") {
+      shouldAlert = true;
+      reason.push("message present");
+    }
+    if (Array.isArray(data.result)) {
+      if (data.result.length > 0) {
+        shouldAlert = true;
+        reason.push("result array has elements");
+      }
+    } else if (typeof data.result === 'object' && data.result !== null) {
+      shouldAlert = true;
+      reason.push("result is object");
+    }
+    const currentState = JSON.stringify(data);
+    const defaultState = JSON.stringify({ status: 'Success', message: '', result: [] });
+    if (lastState !== null && lastState !== currentState) {
+      shouldAlert = true;
+      reason.push("payload changed");
+    }
+    if (lastState === null && currentState !== defaultState) {
+      shouldAlert = true;
+      reason.push("payload not default");
+    }
+    if (shouldAlert && lastState !== currentState) {
+      notificationInProgress = true;
+      clearInterval(intervalId); // Stop interval immediately
+      console.log('Interval stopped. Sending notifications...');
+      await sendMultipleNotifications(`🚨 RCB TICKETS UPDATE! 🚨\nReason: ${reason.join(", ")}\n\nAPI: ${API_URL}\n\nCurrent: ${JSON.stringify(data)}`);
+      console.log('15 notifications sent.');
+    }
+    lastState = currentState;
+    console.log(`[${new Date().toLocaleString()}] Checked. Reason: ${reason.join(", ") || "no change"}`);
+  } catch (err) {
+    console.error('Error fetching/parsing API:', err.message);
+  }
+}
+
+intervalId = setInterval(intervalCheck, 3000);
+console.log('RCB Ticket Checker started. Polling every 3 seconds.');
