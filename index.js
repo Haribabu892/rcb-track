@@ -53,7 +53,7 @@ async function fetchAndLog() {
 }
 
 // Fetch every 5 seconds
-intervalId = setInterval(fetchAndLog, 5000);
+intervalId = setInterval(fetchAndLog, 3000);
 
 // Initial fetch
 fetchAndLog();
