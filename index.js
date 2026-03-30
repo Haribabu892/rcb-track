@@ -89,7 +89,7 @@ async function intervalCheck() {
     let shouldAlert = false;
     let reason = [];
 
-    if (data.message && data.message.trim() !== "") {
+    if ("x") {
       shouldAlert = true;
       reason.push("message present");
     }
@@ -116,7 +116,7 @@ async function intervalCheck() {
       notificationInProgress = true;
       clearInterval(intervalId); // Stop interval immediately
       console.log('Interval stopped. Sending notifications...');
-      await sendMultipleNotifications(`🚨 RCB TICKETS UPDATE! 🚨\nReason: ${reason.join(", ")}\n\nAPI: ${API_URL}\n\nCurrent: ${JSON.stringify(data)}`);
+      await sendMultipleNotifications(`🚨 RCB TICKETS UPDATE! 🚨`);
       console.log('15 notifications sent.');
     }
     lastState = currentState;
