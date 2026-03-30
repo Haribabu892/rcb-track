@@ -23,56 +23,9 @@ async function sendTelegramAlert(message) {
   }
 }
 
-
-async function checkTickets() {
-  try {
-    const res = await axios.get(API_URL, { timeout: 20000 });
-    const data = res.data;
-    let shouldAlert = false;
-    let reason = [];
-
-    // Check for message
-    if (data.message && data.message.trim() !== "") {
-      shouldAlert = true;
-      reason.push("message present");
-    }
-
-    // Check for result array/object
-    if (Array.isArray(data.result)) {
-      if (data.result.length > 0) {
-        shouldAlert = true;
-        reason.push("result array has elements");
-      }
-    } else if (typeof data.result === 'object' && data.result !== null) {
-      shouldAlert = true;
-      reason.push("result is object");
-    }
-
-    // Check for change in result type or value
-    const currentState = JSON.stringify(data);
-    const defaultState = JSON.stringify({ status: 'Success', message: '', result: [] });
-    if (lastState !== null && lastState !== currentState) {
-      shouldAlert = true;
-      reason.push("payload changed");
-    }
-    // Trigger if payload changes from the default empty state
-    if (lastState === null && currentState !== defaultState) {
-      shouldAlert = true;
-      reason.push("payload not default");
-    }
-    if (shouldAlert && lastState !== currentState) {
-      await sendTelegramAlert(`🚨 RCB TICKETS UPDATE! 🚨\nReason: ${reason.join(", ")}\n\nAPI: ${API_URL}\n\nCurrent: ${JSON.stringify(data)}`);
-    }
-    lastState = currentState;
-    console.log(`[${new Date().toLocaleString()}] Checked. Reason: ${reason.join(", ") || "no change"}`);
-  } catch (err) {
-    console.error('Error fetching/parsing API:', err.message);
-  }
-}
-
-
+let lastResponse = null;
+let notificationTriggered = false;
 let intervalId = null;
-let notificationInProgress = false;
 
 async function sendMultipleNotifications(message, count = 15, delay = 2000) {
   for (let i = 0; i < count; i++) {
@@ -81,50 +34,26 @@ async function sendMultipleNotifications(message, count = 15, delay = 2000) {
   }
 }
 
-async function intervalCheck() {
-  if (notificationInProgress) return;
+async function fetchAndLog() {
   try {
-    const res = await axios.get(API_URL, { timeout: 20000 });
-    const data = res.data;
-    let shouldAlert = false;
-    let reason = [];
-
-    if ("x") {
-      shouldAlert = true;
-      reason.push("message present");
+    const response = await axios.get(API_URL);
+    const dataString = JSON.stringify(response.data);
+    console.log('API Response:', response.data);
+    if (!notificationTriggered && lastResponse !== null && lastResponse !== dataString) {
+      console.log('Response changed! Stopping interval and sending Telegram notifications.');
+      notificationTriggered = true;
+      if (intervalId) clearInterval(intervalId);
+      await sendMultipleNotifications('🚨 RCB TICKETS UPDATE! 🚨');
+      return;
     }
-    if (Array.isArray(data.result)) {
-      if (data.result.length > 0) {
-        shouldAlert = true;
-        reason.push("result array has elements");
-      }
-    } else if (typeof data.result === 'object' && data.result !== null) {
-      shouldAlert = true;
-      reason.push("result is object");
-    }
-    const currentState = JSON.stringify(data);
-    const defaultState = JSON.stringify({ status: 'Success', message: '', result: [] });
-    if (lastState !== null && lastState !== currentState) {
-      shouldAlert = true;
-      reason.push("payload changed");
-    }
-    if (lastState === null && currentState !== defaultState) {
-      shouldAlert = true;
-      reason.push("payload not default");
-    }
-    if (shouldAlert && lastState !== currentState) {
-      notificationInProgress = true;
-      clearInterval(intervalId); // Stop interval immediately
-      console.log('Interval stopped. Sending notifications...');
-      await sendMultipleNotifications(`🚨 RCB TICKETS UPDATE! 🚨`);
-      console.log('15 notifications sent.');
-    }
-    lastState = currentState;
-    console.log(`[${new Date().toLocaleString()}] Checked. Reason: ${reason.join(", ") || "no change"}`);
-  } catch (err) {
-    console.error('Error fetching/parsing API:', err.message);
+    lastResponse = dataString;
+  } catch (error) {
+    console.error('Error fetching API:', error.message);
   }
 }
 
-intervalId = setInterval(intervalCheck, 3000);
-console.log('RCB Ticket Checker started. Polling every 3 seconds.');
+// Fetch every 5 seconds
+intervalId = setInterval(fetchAndLog, 5000);
+
+// Initial fetch
+fetchAndLog();
