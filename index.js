@@ -13,9 +13,13 @@ const apiClient = axios.create({
 
 
 const TELEGRAM_BOT_TOKEN = "8606504447:AAHmj3Puj6lzzSiymQzOjblqz4WTbQfZux4"; // Revoke this via @BotFather after the drop!
-const TELEGRAM_CHAT_IDS = ["682166234"];
-const API_URL = "https://rcbscaleapi.ticketgenie.in/ticket/eventlist/O";
-let lastState = null;
+const TELEGRAM_CHAT_IDS = ["682166234","7270546477","622885791","6125693399"];
+const API_URLS = [
+  "https://rcbscaleapi.ticketgenie.in/ticket/eventlist/O",
+  "https://rcbscaleapi.ticketgenie.in/ticket/eventlist/U",
+  "https://rcbscaleapi.ticketgenie.in/ticket/eventlist/P",
+
+];
 
 
 async function sendTelegramAlert(message) {
@@ -33,11 +37,10 @@ async function sendTelegramAlert(message) {
   }
 }
 
-let lastResponse = null;
 let notificationTriggered = false;
 let intervalId = null;
 
-async function sendMultipleNotifications(message, count = 2, delay = 2000) {
+async function sendMultipleNotifications(message, count = 10, delay = 2000) {
   for (let i = 0; i < count; i++) {
     await sendTelegramAlert(`${message}\n(Notification ${i + 1} of ${count})`);
     if (i < count - 1) await new Promise(res => setTimeout(res, delay));
@@ -46,24 +49,28 @@ async function sendMultipleNotifications(message, count = 2, delay = 2000) {
 
 async function fetchAndLog() {
   try {
-    const response = await apiClient.get(API_URL);
-    const dataString = JSON.stringify(response.data);
-    console.log('API Response:', response.data);
-    if (!notificationTriggered && lastResponse !== null && lastResponse !== dataString) {
-      console.log('Response changed! Stopping interval and sending Telegram notifications.');
+    const responses = await Promise.all(API_URLS.map(url => apiClient.get(url)));
+    const allEvents = responses.flatMap((res, i) => {
+      console.log(`API Response [${API_URLS[i]}]:`, res.data);
+      return res.data?.result || [];
+    });
+    const hasBuyTickets = allEvents.some(e => e.event_Button_Text === 'BUY TICKETS');
+    if (!notificationTriggered && hasBuyTickets) {
+      console.log('Tickets available! Stopping interval and sending Telegram notifications.');
       notificationTriggered = true;
       if (intervalId) clearInterval(intervalId);
-      await sendMultipleNotifications('🚨 RCB TICKETS UPDATE! 🚨');
+      const msg = `🚨 RCB TICKETS AVAILABLE! 🚨`;
+      await sendMultipleNotifications(msg);
       return;
     }
-    lastResponse = dataString;
+    console.log('No tickets yet. Button texts:', allEvents.map(e => e.event_Button_Text).join(', '));
   } catch (error) {
     console.error('Error fetching API:', error.message);
   }
 }
 
 // Fetch every 5 seconds
-intervalId = setInterval(fetchAndLog, 3000);
+intervalId = setInterval(fetchAndLog, 5000);
 
 // Initial fetch
 fetchAndLog();
