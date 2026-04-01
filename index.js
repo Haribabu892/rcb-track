@@ -1,6 +1,16 @@
 
 const axios = require('axios');
 
+const apiClient = axios.create({
+  timeout: 15000,
+  headers: {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    Accept: 'application/json, text/plain, */*',
+    Referer: 'https://ticketgenie.in/',
+    Origin: 'https://ticketgenie.in'
+  }
+});
+
 
 const TELEGRAM_BOT_TOKEN = "8606504447:AAHmj3Puj6lzzSiymQzOjblqz4WTbQfZux4"; // Revoke this via @BotFather after the drop!
 const TELEGRAM_CHAT_IDS = ["682166234"];
@@ -36,7 +46,7 @@ async function sendMultipleNotifications(message, count = 2, delay = 2000) {
 
 async function fetchAndLog() {
   try {
-    const response = await axios.get(API_URL);
+    const response = await apiClient.get(API_URL);
     const dataString = JSON.stringify(response.data);
     console.log('API Response:', response.data);
     if (!notificationTriggered && lastResponse !== null && lastResponse !== dataString) {
