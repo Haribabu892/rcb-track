@@ -27,7 +27,7 @@ let lastResponse = null;
 let notificationTriggered = false;
 let intervalId = null;
 
-async function sendMultipleNotifications(message, count = 15, delay = 2000) {
+async function sendMultipleNotifications(message, count = 2, delay = 2000) {
   for (let i = 0; i < count; i++) {
     await sendTelegramAlert(`${message}\n(Notification ${i + 1} of ${count})`);
     if (i < count - 1) await new Promise(res => setTimeout(res, delay));
