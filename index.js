@@ -55,7 +55,7 @@ async function fetchAndLog() {
     const response = await apiClient.get(API_URL);
     const events = response.data?.result || [];
     console.log('API Response:', response.data);
-    const hasBuyTickets = events.some(e => e.event_Button_Text === 'BUY TICKETS');
+    const hasBuyTickets = events.some(e => e.event_Button_Text === 'BUY TICKETS' && e.event_Code !== 3);
     if (!notificationTriggered && hasBuyTickets) {
       console.log('Tickets available! Stopping interval and sending Telegram notifications.');
       notificationTriggered = true;
