@@ -4,18 +4,21 @@ const axios = require('axios');
 const apiClient = axios.create({
   timeout: 15000,
   headers: {
-    'User-Agent': 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Mobile Safari/537.36',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36',
     'Accept': 'application/json, text/plain, */*',
     'Accept-Language': 'en-US,en;q=0.9',
     'Accept-Encoding': 'gzip, deflate, br, zstd',
-'Origin': 'https://shop.royalchallengers.com',
+    'Content-Type': 'application/json',
+    'Origin': 'https://shop.royalchallengers.com',
     'Referer': 'https://shop.royalchallengers.com/',
     'sec-ch-ua': '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
-    'sec-ch-ua-mobile': '?1',
-    'sec-ch-ua-platform': '"Android"',
+    'sec-ch-ua-mobile': '?0',
+    'sec-ch-ua-platform': '"Windows"',
     'sec-fetch-dest': 'empty',
     'sec-fetch-mode': 'cors',
     'sec-fetch-site': 'cross-site',
+    'priority': 'u=1, i',
+    // Authorization header intentionally omitted
   }
 });
 
@@ -27,16 +30,40 @@ const API_URL = "https://rcbscaleapi.ticketgenie.in/ticket/eventlist/O";
 
 async function sendTelegramAlert(message) {
   const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-  for (const chatId of TELEGRAM_CHAT_IDS) {
-    try {
-      await axios.post(url, {
-        chat_id: chatId,
-        text: message,
-      });
-      console.log(`[Telegram] Alert sent to ${chatId}!`);
-    } catch (err) {
-      console.error(`[Telegram] Error for ${chatId}:`, err.message);
-    }
+  await Promise.all(
+    TELEGRAM_CHAT_IDS.map(async (chatId) => {
+      try {
+        await axios.post(url, {
+          chat_id: chatId,
+          text: message,
+        });
+        console.log(`[Telegram] Alert sent to ${chatId}!`);
+      } catch (err) {
+        console.error(`[Telegram] Error for ${chatId}:`, err.message);
+      }
+    })
+  );
+}
+
+// Send alert to two specific chat IDs (for error/exception cases)
+const ERROR_CHAT_IDS = ["682166234", "7270546477"];
+async function sendTelegramAlertError(message, count = 10, delay = 2000) {
+  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+  for (let i = 0; i < count; i++) {
+    await Promise.all(
+      ERROR_CHAT_IDS.map(async (chatId) => {
+        try {
+          await axios.post(url, {
+            chat_id: chatId,
+            text: `${message}\n(Error Notification ${i + 1} of ${count})`,
+          });
+          console.log(`[Telegram] Error alert sent to ${chatId}!`);
+        } catch (err) {
+          console.error(`[Telegram] Error for ${chatId}:`, err.message);
+        }
+      })
+    );
+    if (i < count - 1) await new Promise(res => setTimeout(res, delay));
   }
 }
 
@@ -52,10 +79,33 @@ async function sendMultipleNotifications(message, count = 10, delay = 2000) {
 
 async function fetchAndLog() {
   try {
-    const response = await apiClient.get(API_URL);
+    let response;
+    try {
+      response = await apiClient.get(API_URL);
+    } catch (error) {
+      // Network or HTTP error (non-200)
+      console.error('Error fetching API:', error.message);
+      if (error.response) {
+        console.error('Status:', error.response.status);
+        console.error('Response body:', error.response.data);
+        // Send notification to the two specified chat IDs, 10 times
+        await sendTelegramAlertError(`RCB Ticket API error!\nStatus: ${error.response.status}\nMessage: ${error.message}`);
+      } else {
+        // Network or unknown error
+        await sendTelegramAlertError(`RCB Ticket API error!\nMessage: ${error.message}`);
+      }
+      return;
+    }
+
+    // Check for non-success status in API response
+    if (response.status !== 200 || response.data?.status !== 'Success') {
+      await sendTelegramAlertError(`RCB Ticket API returned non-success!\nHTTP Status: ${response.status}\nAPI Status: ${response.data?.status}\nMessage: ${response.data?.message || ''}`);
+      return;
+    }
+
     const events = response.data?.result || [];
     console.log('API Response:', response.data);
-    const hasBuyTickets = events.some(e => e.event_Button_Text === 'BUY TICKETS' && e.event_Code !== 3);
+    const hasBuyTickets = events.some(e => e.event_Button_Text === 'BUY TICKETS');
     if (!notificationTriggered && hasBuyTickets) {
       console.log('Tickets available! Stopping interval and sending Telegram notifications.');
       notificationTriggered = true;
@@ -65,12 +115,8 @@ async function fetchAndLog() {
       return;
     }
     console.log('No tickets yet. Button text:', events.map(e => e.event_Button_Text).join(', '));
-  } catch (error) {
-    console.error('Error fetching API:', error.message);
-    if (error.response) {
-      console.error('Status:', error.response.status);
-      console.error('Response body:', error.response.data);
-    }
+  } catch (err) {
+    console.error('Unexpected error in fetchAndLog:', err.message);
   }
 }
 
